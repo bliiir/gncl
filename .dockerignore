@@ -1,0 +1,20 @@
+# Keep the build context small and free of anything that must not reach a layer.
+#
+# .env is the one that matters: it holds the basic-auth credentials, and an
+# image layer is extractable long after the file is deleted from a later layer.
+# The container gets its configuration from the environment instead -- compose
+# reads .env on the host and injects the values (docker-compose.yml), which is
+# why gncl.config accepts injected variables with no file present.
+.env
+.env.local
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Build outputs and history: not needed by the image, and .git is large.
+out/
+.git/
+.github/

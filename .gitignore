@@ -1,0 +1,30 @@
+# secrets
+.env
+.env.local
+
+# design source: the brand bundle the UI was ported from, not a build input
+design/
+
+# outputs
+out/
+*.parquet
+guests_minimal.csv
+guests_full.csv
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+
+# working notes
+docs/notes/
+
+# Repo tooling, not part of the deliverable
+utils/

@@ -1,0 +1,86 @@
+# Two profiles, because the same image runs in two very different places.
+#
+#   docker compose                  up   land HQ: hosted chat, full connectivity
+#   docker compose --profile vessel up   at sea: local model, no egress assumed
+#
+# Shore is the default, set by COMPOSE_PROFILES in .env. A --profile flag on the
+# command line replaces that value rather than adding to it, so the vessel line
+# starts api-vessel alone. Without the .env entry, a bare `docker compose up`
+# matches no service and exits 0 having started nothing.
+#
+# The two services share a base by YAML anchor rather than `extends`, because
+# `extends` merges the parent's `profiles` list into the child: api-vessel
+# inherited [shore] and `--profile shore up` started both containers.
+
+x-api-base: &api-base
+  build: .
+  image: gncl-api:latest
+  ports:
+    # Bound to loopback. Put a TLS terminator in front rather than exposing
+    # basic-auth credentials over plaintext on a public interface.
+    - "127.0.0.1:8000:8000"
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp
+  extra_hosts:
+    # Docker Desktop resolves this name on its own. Linux does not, and Linux is
+    # what both EC2 and the vessel actually run, so without this the audit host
+    # below is unresolvable exactly where it is deployed.
+    - "host.docker.internal:host-gateway"
+
+x-api-env: &api-env
+  GNCL_AUTH_USER: ${GNCL_AUTH_USER:?set GNCL_AUTH_USER in .env}
+  GNCL_AUTH_PASSWORD: ${GNCL_AUTH_PASSWORD:?set GNCL_AUTH_PASSWORD in .env}
+  GNCL_RATE_LIMIT_PER_MIN: ${GNCL_RATE_LIMIT_PER_MIN:-60}
+  GNCL_AUTH_FAIL_PER_MIN: ${GNCL_AUTH_FAIL_PER_MIN:-5}
+  GNCL_THRESHOLD: ${GNCL_THRESHOLD:-0.80}
+  # Both profiles audit against a local model; only the chat backend differs.
+  #
+  # Deliberately NOT ${OLLAMA_HOST}. That variable points the *CLI* at a server
+  # on the developer's machine, where localhost is right. Inside a container
+  # localhost is the container, so reusing it aimed the audit at itself and
+  # disabled it silently -- `available()` returns False and the pipeline
+  # degrades without complaining. Set OLLAMA_HOST_IN_CONTAINER when the model
+  # runs somewhere other than the docker host.
+  OLLAMA_HOST: ${OLLAMA_HOST_IN_CONTAINER:-http://host.docker.internal:11434}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:12b}
+
+services:
+  api:
+    <<: *api-base
+    profiles: [shore]
+    environment:
+      <<: *api-env
+      # shore: hosted chat is reachable and cheap at this call volume.
+      GNCL_PROFILE: shore
+      # Shore only, and only since /chat exists (#41, #10). Empty is a supported
+      # state: the tab renders and says chat is unconfigured rather than
+      # breaking. Use a spend-capped personal key and rotate it when the
+      # instance comes down -- this is a live billable credential on a
+      # public-facing box behind one shared password.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # Same image, no egress assumed. The audit runs against a local model; guest
+  # PII never leaves the ship. Sized larger because the model is resident rather
+  # than remote.
+  api-vessel:
+    <<: *api-base
+    profiles: [vessel]
+    environment:
+      <<: *api-env
+      GNCL_PROFILE: vessel
+      # No key, deliberately. Chat is hosted, and this profile assumes no
+      # egress, so the tab reports itself unconfigured rather than hanging on a
+      # request that cannot complete. Everything else works unchanged.
+    deploy:
+      resources:
+        limits:
+          memory: 4G

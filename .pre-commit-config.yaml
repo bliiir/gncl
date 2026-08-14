@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.2
+    hooks:
+      - id: ruff-format
+      - id: ruff
+        args: [--fix]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      # A credential reaching the index is not recoverable by editing the file.
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -q
+        language: system
+        pass_filenames: false
+        types: [python]
+      # Generated docs are asserted current by tests, but failing at commit is
+      # cheaper than failing in CI.
+      - id: reports-current
+        name: generated reports are current
+        entry: uv run pytest -q tests/test_analysis.py::test_report_is_current
+        language: system
+        pass_filenames: false
+        files: ^(gncl/analysis\.py|docs/DATA_ANALYSIS\.md)$

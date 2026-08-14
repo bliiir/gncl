@@ -1,0 +1,84 @@
+[project]
+name = "gncl"
+version = "0.1.0"
+description = "Cross-source guest identity resolution for Go Nordic Cruiseline"
+# Verified on 3.13.7. Pinned rather than >=3.11 so a reviewer resolves the
+# interpreter this was actually tested against.
+requires-python = ">=3.13"
+dependencies = [
+    "pandas>=2.2",
+    "networkx>=3.3",
+    "click>=8.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+llm = ["ollama>=0.4", "anthropic>=0.40"]
+api = ["fastapi>=0.115", "uvicorn>=0.32"]
+
+[project.scripts]
+gncl = "gncl.cli:main"
+
+[dependency-groups]
+# The dev group carries the optional extras too. Without them `uv run pytest`
+# re-syncs to the default environment and the API tests fail at collection,
+# which is the first command in the README.
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "httpx2>=2.10",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "ollama>=0.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gncl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# Default is E4,E7,E9,F only, which meant the noqa suppressions in the codebase
+# referenced rules that were never enabled. They were decorative.
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # import sorting
+    "UP",          # pyupgrade
+    "B",           # bugbear
+    "SIM",         # simplify
+    "C4",          # comprehensions
+    "RET",         # returns
+    "PL",          # pylint
+    "RUF",         # ruff-specific
+    "S",           # bandit
+    "DTZ",         # naive datetimes
+    "BLE",         # blind except
+    "ISC",         # implicit str concat
+    "PTH",         # pathlib over os.path
+    "ARG",         # unused arguments
+    "N",           # naming
+]
+ignore = [
+    "E501",        # line length is handled by the formatter
+    "PLR0913",     # argument count: injection means more arguments, on purpose
+    "PLR0917",     # same
+    # Imports inside functions are deliberate here: optional extras (ollama,
+    # fastapi, uvicorn) must not be imported when the extra is not installed,
+    # and the CLI stays fast by not importing pandas until a command runs.
+    "PLC0415",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert on literals and shell out on purpose.
+"tests/*" = ["S101", "S603", "S607", "PLR2004", "ARG001", "ARG002", "S106"]
+# Protocol methods take arguments they do not use; that is the signature.
+"gncl/ports.py" = ["ARG002"]

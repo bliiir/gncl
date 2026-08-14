@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Exactly what the README tells a reviewer to run. If this fails, the
+      # first command in the README fails for them too.
+      - name: Install
+        run: uv sync --group dev
+
+      # Also the README's second line. The commands refuse to run without
+      # configuration, so a clean checkout must do this before anything else --
+      # and CI failing here would mean a reviewer's clean clone fails too.
+      - name: Configure
+        run: cp .env-example .env
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Tests
+        run: uv run pytest -q
+
+      # The pipeline must run from a clean checkout, not just import.
+      - name: Pipeline runs end to end
+        run: uv run gncl resolve --no-audit --out /tmp/ci-out
+
+      - name: Output has the expected shape
+        run: |
+          test "$(wc -l < /tmp/ci-out/guests.csv)" -eq 36  # 35 rows + header
+          head -1 /tmp/ci-out/guests.csv | tr ',' '\n' | wc -l | grep -qx 37
